@@ -211,21 +211,11 @@ class Document:
                 self.tokens[token_index].ner_tag = "I-" + self.entity_annotations[ann_i].type
 
 
-def main(args, verbose=True):
+def main(args):
     import os
 
-    if args.logging_level == "DEBUG":
-        logging_level = logging.DEBUG
-    elif args.logging_level == "INFO":
-        logging_level = logging.INFO
-    elif args.logging_level == "WARNING":
-        logging_level = logging.WARNING
-    elif args.logging_level == "ERROR":
-        logging_level = logging.ERROR
-    elif args.logging_level == "CRITICAL":
-        logging_level = logging.CRITICAL
-    else:
-        assert False, "unexpected value: {} for logging level".format(args.logging_level)
+    assert args.logging_level in ["DEBUG", "INFO", "WARN", "WARNING", "ERROR", "CRITICAL"], "unexpected logging_level: {}".format(args.logging_level)
+    logging_level = logging.getLevelName(level=args.logging_level)
 
     obj_nlp_process = NLPProcess(logging_level=logging_level)
     obj_nlp_process.load_nlp_model()

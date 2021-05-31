@@ -26,10 +26,7 @@ class CRF:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(level=logging_level)
 
-    def process_collection(self, data_dir, nlp_process_obj, random_seed=0):
-
-        # set seed for the pseudo-random number generator
-        np.random.seed(random_seed)
+    def process_collection(self, data_dir, nlp_process_obj):
 
         X = []  # features
         y = []  # NER labels
@@ -48,9 +45,9 @@ class CRF:
                 continue
 
             try:
-                doc_obj = Document(doc_case=clinical_case, nlp_process_obj=nlp_process_obj)
+                doc_obj = Document(doc_case=clinical_case)
                 doc_obj.read_document(document_file=file_document)
-                doc_obj.parse_document()
+                doc_obj.parse_document(nlp_process=nlp_process_obj)
                 doc_obj.read_annotation(ann_file=file_ann)
                 doc_obj.parse_annotations()
                 doc_obj.assign_ground_truth_ner_tags()
@@ -124,6 +121,95 @@ class CRF:
 
         print(seqeval_metrics.classification_report(y_true=y_test, y_pred=y_pred, digits=3))
 
+    def predict_collection(self, input_data_dir, output_data_dir, nlp_process):
+        if not os.path.exists(output_data_dir):
+            os.makedirs(output_data_dir)
+
+        for f in glob.iglob(pathname=os.path.join(input_data_dir, "*.txt")):
+            # extract clinical case
+            file_basename, _ = os.path.splitext(os.path.basename(f))
+            clinical_case = file_basename
+
+            try:
+                doc_obj = Document(doc_case=clinical_case)
+                doc_obj.read_document(document_file=f)
+                doc_obj.parse_document(nlp_process=nlp_process)
+
+                y_pred_doc = self.predict_document(doc_obj=doc_obj)
+                entity_annotations = self.build_predicted_entities(doc_obj=doc_obj, y_pred_doc=y_pred_doc)
+                file_ann = os.path.join(output_data_dir, clinical_case+".ann")
+                self.save_predicted_entities(entity_annotations=entity_annotations, doc_obj=doc_obj, filename=file_ann)
+            except Exception as err:
+                self.logger.error("Failed for clinical case: {}".format(clinical_case), exc_info=True)
+
+    def predict_document(self, doc_obj):
+        """Predict NER tags for the document"""
+        feature_obj = Feature(doc_obj=doc_obj)
+        doc_features = feature_obj.extract_document_features()
+        y_pred_doc = self.crf.predict(X=doc_features)
+
+        return y_pred_doc
+
+    @staticmethod
+    def build_predicted_entities(doc_obj, y_pred_doc):
+        entity_annotations = []
+
+        assert len(y_pred_doc) == len(doc_obj.sentences),\
+            "Mismatch: len(predicted sentences): {} :: len(document sentences): {}".format(len(y_pred_doc), len(doc_obj.sentences))
+
+        # iterate over each of the sentences and build annotations(if entity predicted)
+        for sent_i in range(len(doc_obj.sentences)):
+            start_token_index_sent = doc_obj.sentences[sent_i].start_token_index
+            end_token_index_sent = doc_obj.sentences[sent_i].end_token_index
+            y_pred_sent = y_pred_doc[sent_i]
+            assert len(y_pred_sent) == (end_token_index_sent - start_token_index_sent),\
+                "Mismatch: sent_i: {} :: len(predicted tokens): {} :: len(sentence tokens): {}".format(sent_i, len(y_pred_sent), (end_token_index_sent - start_token_index_sent))
+
+            # iterate over the tokens
+            # N.B. start_token_index, end_token_index for the document sentences are w.r.t. token indexes of the entire documnent
+            for token_i in range(end_token_index_sent - start_token_index_sent):
+                ner_tag = y_pred_sent[token_i]
+                if ner_tag == "O":
+                    continue
+
+                ner_tag_tokens = ner_tag.split("-")
+                assert len(ner_tag_tokens) > 1, "NER tag not in BIO format :: Named Entity: {}".format(ner_tag)
+
+                if ner_tag_tokens[0] == "B":
+                    # start of next named entity
+                    entity_type = ner_tag[2:]
+                    entity_id = "T" + str(len(entity_annotations) + 1)
+                    # token index wrt tokens of the entire document
+                    start_token_index_ent = start_token_index_sent + token_i
+                    # Currently assigning token end as the next token. But will be modified if entity continues to next token(s)  # noqa
+                    end_token_index_ent = start_token_index_ent + 1
+                    start_char_pos_ent = doc_obj.tokens[start_token_index_ent].start_char_pos
+                    end_char_pos_ent = doc_obj.tokens[start_token_index_ent].end_char_pos
+
+                    entity_ann = EntityAnnotation(entity_id=entity_id, start_char_pos=start_char_pos_ent,
+                                                  end_char_pos=end_char_pos_ent, start_token_index=start_token_index_ent,
+                                                  end_token_index=end_token_index_ent, entity_type=entity_type)
+                    entity_annotations.append(entity_ann)
+                elif ner_tag_tokens[0] == "I":
+                    # Continuation of previous named entity
+                    # Update end token index and end char pos. Would be updated again if next token is also part of the current entity. # noqa
+                    end_token_index_ent = start_token_index_sent + token_i + 1
+                    end_char_pos_ent = doc_obj.tokens[end_token_index_ent-1].end_char_pos
+                    entity_annotations[-1].end_token_index = end_token_index_ent
+                    entity_annotations[-1].end_char_pos = end_char_pos_ent
+                else:
+                    assert False, "ERROR :: ner_tag expected either B-<Entity Type> or I-<Entity Type>"
+
+        return entity_annotations
+
+    @staticmethod
+    def save_predicted_entities(entity_annotations, doc_obj, filename):
+        with io.open(file=filename, mode="w", encoding="utf-8") as fd:
+            for entity_ann in entity_annotations:
+                entity_text = doc_obj.text[entity_ann.start_char_pos: entity_ann.end_char_pos]
+                fd.write("{}\t{} {} {}\t{}\n".format(entity_ann.id, entity_ann.type, entity_ann.start_char_pos,
+                                                     entity_ann.end_char_pos, entity_text))
+
 
 def main(args):
     assert args.logging_level in ["DEBUG", "INFO", "WARN", "WARNING", "ERROR",
@@ -135,12 +221,16 @@ def main(args):
     obj_nlp_process.load_nlp_model()
     obj_crf = CRF(logging_level=logging_level)
 
-    start_time = time.time()
-    X, y = obj_crf.process_collection(data_dir=args.data_dir, nlp_process_obj=obj_nlp_process, random_seed=args.random_seed)
-    obj_crf.logger.info("\nprocess_collection() on data_dir took {:.3f} seconds\n".format(time.time() - start_time))
-    start_time = time.time()
+    X = None
+    y = None
+
+    if args.flag_train or args.flag_train_test_split or args.flag_evaluate:
+        start_time = time.time()
+        X, y = obj_crf.process_collection(data_dir=args.data_dir, nlp_process_obj=obj_nlp_process)
+        obj_crf.logger.info("\nprocess_collection() on data_dir took {:.3f} seconds\n".format(time.time() - start_time))
 
     if args.flag_train:
+        start_time = time.time()
         obj_crf.train(X_train=X, y_train=y)
         obj_crf.logger.info("\ntrain CRF took {:.3f} seconds\n".format(time.time() - start_time))
 
@@ -152,6 +242,7 @@ def main(args):
         train_size = args.train_size
         while train_size < 1.0:
             # split data into train and test set
+            # https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html
             train_X, dev_X, train_y, dev_y = train_test_split(X, y, train_size=train_size, random_state=args.random_seed)
             obj_crf.logger.info("{}Train size(fraction): {} :: len(train samples): {} :: len(test samples): {} {}\n"
                                 .format("-"*5, train_size, len(train_y), len(dev_y), "-"*5))
@@ -184,10 +275,20 @@ def main(args):
         obj_crf.evaluate(X_test=X, y_test=y)
         print('\nEvaluate took {:.3f} seconds\n'.format(time.time() - start_time))
 
+    if args.flag_predict:
+        obj_crf.load_model(filename=args.train_model)
+        obj_crf.logger.info("Train model: {} loaded".format(args.train_model))
+
+        start_time = time.time()
+        # TODO use os.path.split() to get last directory name. Current implementation is dependent on whether data_dir ends with "/" or not.
+        output_dir = os.path.join(os.path.dirname(__file__), "../output/predict", os.path.basename(os.path.dirname(args.data_dir)))
+        obj_crf.predict_collection(input_data_dir=args.data_dir, output_data_dir=output_dir, nlp_process=obj_nlp_process)
+        print('\nPredict took {:.3f} seconds\n'.format(time.time() - start_time))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", action="store", default="C:/KA/data/NLP/MEDDOPROF/meddoprof-train-set/task1", dest="data_dir")
+    parser.add_argument("--data_dir", action="store", default="C:/KA/data/NLP/MEDDOPROF/meddoprof-train-set/task1/", dest="data_dir")
     parser.add_argument("--logging_level", action="store", default="INFO", dest="logging_level",
                         help="options: DEBUG, INFO, WARNING, ERROR, CRITICAL")
     parser.add_argument("--train_size", action="store", type=float, default=0.2, dest="train_size",
@@ -203,6 +304,7 @@ if __name__ == "__main__":
     parser.add_argument("--random_seed", action="store", type=int, default=0, dest="random_seed")
     parser.add_argument("--flag_evaluate", action="store_true", default=False, dest="flag_evaluate",
                         help="Evaluate on the dataset using the train_model")
+    parser.add_argument("--flag_predict", action="store_true", default=False, dest="flag_predict")
 
     args = parser.parse_args()
 

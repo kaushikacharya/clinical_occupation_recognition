@@ -8,6 +8,7 @@ import re
 from src.annotation import EntityAnnotation
 from src.nlp_process import NLPProcess
 
+
 class Token:
     """Token class.
     """
@@ -29,6 +30,7 @@ class Token:
         self.children_index_arr = children_index_arr
         self.ner_tag = ner_tag
 
+
 class Sentence:
     """Sentence class.
 
@@ -43,9 +45,10 @@ class Sentence:
         self.start_token_index = start_token_index
         self.end_token_index = end_token_index
 
+
 class Document:
     """Clinical case document"""
-    def __init__(self, doc_case, nlp_process_obj, logging_level=logging.INFO):
+    def __init__(self, doc_case, logging_level=logging.INFO):
         self.case = doc_case
         self.text = None
         # objects of Sentence class
@@ -59,8 +62,6 @@ class Document:
         self.logger.setLevel(level=logging_level)
         # print(self.logger.isEnabledFor(level=logging_level))
 
-        self.nlp_process = nlp_process_obj
-
     def read_document(self, document_file):
         try:
             with io.open(document_file, mode="r", encoding="utf-8") as fd:
@@ -69,12 +70,13 @@ class Document:
         except Exception as err:
             print(err)
 
-    def parse_document(self):
+    def parse_document(self, nlp_process):
         """
         Populate sentence and tokens for the document.
+        NLPProcess is also applied to extract part-of-speech and dependency parse.
         """
         assert self.text is not None, "pre-requisite: execute read_document()"
-        doc = self.nlp_process.construct_doc(text=self.text)
+        doc = nlp_process.construct_doc(text=self.text)
 
         for sent_i, sent in enumerate(doc.sents):
             # start_token_index_sent = len(self.tokens)
@@ -214,14 +216,15 @@ class Document:
 def main(args):
     import os
 
-    assert args.logging_level in ["DEBUG", "INFO", "WARN", "WARNING", "ERROR", "CRITICAL"], "unexpected logging_level: {}".format(args.logging_level)
+    assert args.logging_level in ["DEBUG", "INFO", "WARN", "WARNING", "ERROR", "CRITICAL"],\
+        "unexpected logging_level: {}".format(args.logging_level)
     logging_level = logging.getLevelName(level=args.logging_level)
 
     obj_nlp_process = NLPProcess(logging_level=logging_level)
     obj_nlp_process.load_nlp_model()
-    doc_obj = Document(doc_case=args.clinical_case, nlp_process_obj=obj_nlp_process, logging_level=logging_level)
+    doc_obj = Document(doc_case=args.clinical_case, logging_level=logging_level)
     doc_obj.read_document(document_file=os.path.join(args.data_dir, args.clinical_case+".txt"))
-    doc_obj.parse_document()
+    doc_obj.parse_document(nlp_process=obj_nlp_process)
     doc_obj.read_annotation(ann_file=os.path.join(args.data_dir, args.clinical_case+".ann"))
     doc_obj.parse_annotations()
     doc_obj.assign_ground_truth_ner_tags()

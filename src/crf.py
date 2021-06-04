@@ -6,7 +6,9 @@ import joblib
 import logging
 import numpy as np
 import os
+from pathlib import Path
 import seqeval.metrics as seqeval_metrics
+import shutil
 import sklearn_crfsuite
 import sklearn_crfsuite.metrics as crfsuite_metrics
 from sklearn.model_selection import train_test_split
@@ -280,8 +282,9 @@ def main(args):
         obj_crf.logger.info("Train model: {} loaded".format(args.train_model))
 
         start_time = time.time()
-        # TODO use os.path.split() to get last directory name. Current implementation is dependent on whether data_dir ends with "/" or not.
-        output_dir = os.path.join(os.path.dirname(__file__), "../output/predict", os.path.basename(os.path.dirname(args.data_dir)))
+        output_dir = os.path.join(os.path.dirname(__file__), "../output/predict", os.path.basename(Path(args.data_dir)))
+        if os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
         obj_crf.predict_collection(input_data_dir=args.data_dir, output_data_dir=output_dir, nlp_process=obj_nlp_process)
         print('\nPredict took {:.3f} seconds\n'.format(time.time() - start_time))
 

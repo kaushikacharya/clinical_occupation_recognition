@@ -21,6 +21,7 @@ class Token:
                  head_index=None,
                  children_index_arr=None,
                  ner_tag=None):
+        # char position offsets in the document text
         self.start_char_pos = start_char_pos
         self.end_char_pos = end_char_pos
         self.lemma = lemma
@@ -185,12 +186,17 @@ class Document:
                 if end_token_index_ann is None:
                     end_token_index_ann = self.sentences[sent_i].end_token_index
 
-                assert self.entity_annotations[entity_ann_index].start_token_index is None, "start_token_index already assigned for entity #{}".format(entity_ann_index)
-                assert self.entity_annotations[entity_ann_index].end_token_index is None, "end_token_index already assigned for entity #{}".format(entity_ann_index)
+                assert self.entity_annotations[entity_ann_index].start_token_index is None,\
+                    "start_token_index already assigned for entity #{}".format(entity_ann_index)
+                assert self.entity_annotations[entity_ann_index].end_token_index is None,\
+                    "end_token_index already assigned for entity #{}".format(entity_ann_index)
 
                 # Assign the token index range to the entity annotation
                 self.entity_annotations[entity_ann_index].start_token_index = start_token_index_ann
                 self.entity_annotations[entity_ann_index].end_token_index = end_token_index_ann
+
+                # Assign sentence index
+                self.entity_annotations[entity_ann_index].sentence_index = sent_i
 
                 # move to the next entity
                 entity_ann_index += 1
@@ -205,6 +211,7 @@ class Document:
         for token_i in range(len(self.tokens)):
             self.tokens[token_i].ner_tag = ner_tag
 
+        # Now update tag for the tokens which are part of entity annotations
         for ann_i in range(len(self.entity_annotations)):
             start_token_index = self.entity_annotations[ann_i].start_token_index
             end_token_index = self.entity_annotations[ann_i].end_token_index

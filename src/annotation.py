@@ -2,7 +2,7 @@
 
 class EntityAnnotation:
     """Entity annotation class"""
-    def __init__(self, entity_id=None, start_char_pos=None, end_char_pos=None, start_token_index=None, end_token_index=None, entity_type=None):
+    def __init__(self, entity_id=None, start_char_pos=None, end_char_pos=None, start_token_index=None, end_token_index=None, sentence_index=None, entity_type=None):
         """
             References
             ----------
@@ -16,4 +16,5 @@ class EntityAnnotation:
         #   N.B. start_token_index is included but end_token_index is excluded.
         self.start_token_index = start_token_index
         self.end_token_index = end_token_index
+        self.sentence_index = sentence_index
         self.type = entity_type

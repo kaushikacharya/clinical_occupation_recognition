@@ -20,6 +20,8 @@ class Gazetteer:
                 tokens = phrases[0].split()
                 cur_node = self.gazetteer_phrase_trie
                 for token in tokens:
+                    if token.istitle():
+                        token = token.lower()
                     if token not in cur_node:
                         cur_node[token] = dict()
                     cur_node = cur_node[token]
@@ -28,10 +30,31 @@ class Gazetteer:
                 cur_node["EOP"] = True
                 # print("line: {}".format(phrases[0]))
 
+    def search(self, tokens):
+        """Search for the input phrase (split into tokens) in the phrase trie.
+
+            Parameters
+            ----------
+            tokens : list (split tokens of the phrase to be searched)
+        """
+        cur_node = self.gazetteer_phrase_trie
+        for token in tokens:
+            if token.istitle():
+                token = token.lower()
+            if token in cur_node:
+                cur_node = cur_node[token]
+            else:
+                return False
+
+        # consider found only if the path end reached
+        return True if "EOP" in cur_node else False
+
 
 def main(args):
     gazetteer_obj = Gazetteer()
     gazetteer_obj.build_gazetteer_phrase_trie(filename=args.gazetteer_file)
+    # flag_found = gazetteer_obj.search("agentes de Salud Comunitaria".split())
+    # print("Found: {}".format(flag_found))
 
 
 if __name__ == "__main__":

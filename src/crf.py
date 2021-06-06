@@ -28,7 +28,7 @@ class CRF:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(level=logging_level)
 
-    def process_collection(self, data_dir, nlp_process_obj):
+    def process_collection(self, data_dir, nlp_process):
 
         X = []  # features
         y = []  # NER labels
@@ -49,7 +49,7 @@ class CRF:
             try:
                 doc_obj = Document(doc_case=clinical_case)
                 doc_obj.read_document(document_file=file_document)
-                doc_obj.parse_document(nlp_process=nlp_process_obj)
+                doc_obj.parse_document(nlp_process=nlp_process)
                 doc_obj.read_annotation(ann_file=file_ann)
                 doc_obj.parse_annotations()
                 doc_obj.assign_ground_truth_ner_tags()
@@ -217,7 +217,6 @@ def main(args):
     assert args.logging_level in ["DEBUG", "INFO", "WARN", "WARNING", "ERROR",
                                   "CRITICAL"], "unexpected logging_level: {}".format(args.logging_level)
     logging_level = logging.getLevelName(level=args.logging_level)
-    assert 0 <= args.train_size <= 1, "train_size: {} expected value in [0,1]".format(args.train_size)
 
     obj_nlp_process = NLPProcess(logging_level=logging_level)
     obj_nlp_process.load_nlp_model()
@@ -228,19 +227,30 @@ def main(args):
 
     if args.flag_train or args.flag_train_test_split or args.flag_evaluate:
         start_time = time.time()
-        X, y = obj_crf.process_collection(data_dir=args.data_dir, nlp_process_obj=obj_nlp_process)
+        X, y = obj_crf.process_collection(data_dir=args.data_dir, nlp_process=obj_nlp_process)
         obj_crf.logger.info("\nprocess_collection() on data_dir took {:.3f} seconds\n".format(time.time() - start_time))
 
     if args.flag_train:
+        # Select entire or subset of train data
+        if args.train_size is not None and args.train_size < 1:
+            train_index_arr, _ = train_test_split(range(len(y)), train_size=args.train_size, random_state=args.random_seed)
+            train_X = [X[i] for i in train_index_arr]
+            train_y = [y[i] for i in train_index_arr]
+        else:
+            train_X = X
+            train_y = y
+
         start_time = time.time()
-        obj_crf.train(X_train=X, y_train=y)
-        obj_crf.logger.info("\ntrain CRF took {:.3f} seconds\n".format(time.time() - start_time))
+        obj_crf.train(X_train=train_X, y_train=train_y)
+        obj_crf.logger.info("\ntrain CRF took {:.3f} seconds :: train_size: {}\n".format(time.time() - start_time, args.train_size))
 
         # Dump the trained model
         obj_crf.save_model(filename=args.train_model)
         obj_crf.logger.info("Train model: {} saved".format(args.train_model))
 
     if args.flag_train_test_split:
+        assert args.train_size is not None, "Expected float value in the range [0,1] for train_size"
+        assert 0 <= args.train_size <= 1, "train_size: {} expected value in [0,1]".format(args.train_size)
         train_size = args.train_size
         while train_size < 1.0:
             # split data into train and test set
@@ -283,6 +293,7 @@ def main(args):
 
         start_time = time.time()
         output_dir = os.path.join(os.path.dirname(__file__), "../output/predict", os.path.basename(Path(args.data_dir)))
+        # Delete output dir (if exists)
         if os.path.exists(output_dir):
             shutil.rmtree(output_dir)
         obj_crf.predict_collection(input_data_dir=args.data_dir, output_data_dir=output_dir, nlp_process=obj_nlp_process)
@@ -294,7 +305,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", action="store", default="C:/KA/data/NLP/MEDDOPROF/meddoprof-train-set/task1/", dest="data_dir")
     parser.add_argument("--logging_level", action="store", default="INFO", dest="logging_level",
                         help="options: DEBUG, INFO, WARNING, ERROR, CRITICAL")
-    parser.add_argument("--train_size", action="store", type=float, default=0.2, dest="train_size",
+    parser.add_argument("--train_size", action="store", type=float, default=None, dest="train_size",
                         help="Fraction of data_dir for training the model."
                              " Values should range in [0,1] (both ends included)."
                              " Complementary fraction would be used for validation.")

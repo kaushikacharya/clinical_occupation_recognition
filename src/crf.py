@@ -2,6 +2,7 @@
 
 import argparse
 import glob
+import itertools
 import joblib
 import logging
 import numpy as np
@@ -18,6 +19,7 @@ import traceback
 from src.document import *
 from src.feature import Feature
 from src.nlp_process import NLPProcess
+from src.utils import *
 
 
 class CRF:
@@ -28,18 +30,33 @@ class CRF:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(level=logging_level)
 
-    def process_collection(self, data_dir, nlp_process):
+    def process_collection(self, clinical_cases, data_dir, nlp_process):
+        """Process collection to extract features and ground truth NER labels.
 
+            Returns
+            -------
+            X : nested list
+            y : nested list
+        """
+
+        """
+        Nested list of features/NER labels follows the following format:
+        
+        - doc0
+            - sent0
+                - tok0
+                - tok1
+            - sent1
+                - tok0
+                - tok1
+        """
         X = []  # features
         y = []  # NER labels
 
-        for f in glob.iglob(pathname=os.path.join(data_dir, "*.txt")):
-            # extract clinical case
-            file_basename, _ = os.path.splitext(os.path.basename(f))
-            clinical_case = file_basename
+        for clinical_case in clinical_cases:
             self.logger.info("Processing clinical case: {}".format(clinical_case))
 
-            file_document = f
+            file_doc = os.path.join(data_dir, clinical_case+".txt")
             file_ann = os.path.join(data_dir, clinical_case+".ann")
 
             if not os.path.exists(file_ann):
@@ -48,7 +65,7 @@ class CRF:
 
             try:
                 doc_obj = Document(doc_case=clinical_case)
-                doc_obj.read_document(document_file=file_document)
+                doc_obj.read_document(document_file=file_doc)
                 doc_obj.parse_document(nlp_process=nlp_process)
                 doc_obj.read_annotation(ann_file=file_ann)
                 doc_obj.parse_annotations()
@@ -64,8 +81,8 @@ class CRF:
                                                 range(sent.start_token_index, sent.end_token_index)]
                     doc_named_entity_labels.append(sent_named_entity_labels)
 
-                X.extend(doc_features)
-                y.extend(doc_named_entity_labels)
+                X.append(doc_features)
+                y.append(doc_named_entity_labels)
 
             except Exception as err:
                 self.logger.error("Failed for clinical case: {}".format(clinical_case), exc_info=True)
@@ -99,6 +116,7 @@ class CRF:
                 Compared at both token as well as entity level.
         """
         assert self.crf is not None, "Pre-requisite: Either execute train() or load_model()"
+        self.logger.info("evaluate(): len(X_test): {} :: len(y_test): {}".format(len(X_test), len(y_test)))
         y_pred = self.crf.predict(X=X_test)
 
         labels = list(self.crf.classes_)
@@ -123,18 +141,25 @@ class CRF:
 
         print(seqeval_metrics.classification_report(y_true=y_test, y_pred=y_pred, digits=3))
 
-    def predict_collection(self, input_data_dir, output_data_dir, nlp_process):
+    def predict_collection(self, clinical_cases, input_data_dir, output_data_dir, nlp_process):
+        """Predict on the clinical cases in the input data directory.
+            Write predicted entities in individual .ann files.
+
+            Parameters
+            ----------
+            clinical_cases : list
+            input_data_dir : Path
+            output_data_dir : Path
+        """
         if not os.path.exists(output_data_dir):
             os.makedirs(output_data_dir)
 
-        for f in glob.iglob(pathname=os.path.join(input_data_dir, "*.txt")):
-            # extract clinical case
-            file_basename, _ = os.path.splitext(os.path.basename(f))
-            clinical_case = file_basename
+        for clinical_case in clinical_cases:
+            file_doc = os.path.join(input_data_dir, clinical_case+".txt")
 
             try:
                 doc_obj = Document(doc_case=clinical_case)
-                doc_obj.read_document(document_file=f)
+                doc_obj.read_document(document_file=file_doc)
                 doc_obj.parse_document(nlp_process=nlp_process)
 
                 y_pred_doc = self.predict_document(doc_obj=doc_obj)
@@ -222,23 +247,42 @@ def main(args):
     obj_nlp_process.load_nlp_model()
     obj_crf = CRF(logging_level=logging_level)
 
+    clinical_cases = collect_clinical_cases(data_dir=args.data_dir)
+    obj_crf.logger.info("# of clinical cases: {}".format(len(clinical_cases)))
     X = None
     y = None
 
     if args.flag_train or args.flag_train_test_split or args.flag_evaluate:
         start_time = time.time()
-        X, y = obj_crf.process_collection(data_dir=args.data_dir, nlp_process=obj_nlp_process)
+        X, y = obj_crf.process_collection(clinical_cases=clinical_cases, data_dir=args.data_dir, nlp_process=obj_nlp_process)
+        assert len(X) == len(y), "Mismatch: len(X): {} :: len(y): {}".format(len(X), len(y))
         obj_crf.logger.info("\nprocess_collection() on data_dir took {:.3f} seconds\n".format(time.time() - start_time))
 
     if args.flag_train:
+        # Flatten the features, NER labels list so that each element of the outermost list represents a sentence.
+        train_X = []
+        train_y = []
+
         # Select entire or subset of train data
         if args.train_size is not None and args.train_size < 1:
-            train_index_arr, _ = train_test_split(range(len(y)), train_size=args.train_size, random_state=args.random_seed)
-            train_X = [X[i] for i in train_index_arr]
-            train_y = [y[i] for i in train_index_arr]
+            train_index_arr, _ = train_test_split(range(len(clinical_cases)), train_size=args.train_size, random_state=args.random_seed)
+
+            train_X = list(itertools.chain.from_iterable([X[i] for i in train_index_arr]))
+            train_y = list(itertools.chain.from_iterable([y[i] for i in train_index_arr]))
+            """
+            for idx in train_index_arr:
+                train_X.extend(X[idx])
+                train_y.extend(y[idx])
+            """
+
+            # train_X = [X[i] for i in train_index_arr]
+            # train_y = [y[i] for i in train_index_arr]
         else:
-            train_X = X
-            train_y = y
+            train_X = list(itertools.chain.from_iterable(X))
+            train_y = list(itertools.chain.from_iterable(y))
+
+            # train_X = X
+            # train_y = y
 
         start_time = time.time()
         obj_crf.train(X_train=train_X, y_train=train_y)
@@ -255,7 +299,14 @@ def main(args):
         while train_size < 1.0:
             # split data into train and test set
             # https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html
-            train_X, dev_X, train_y, dev_y = train_test_split(X, y, train_size=train_size, random_state=args.random_seed)
+            train_index_arr, test_index_arr = train_test_split(range(len(clinical_cases)), train_size=args.train_size, random_state=args.random_seed)
+
+            train_X = list(itertools.chain.from_iterable([X[i] for i in train_index_arr]))
+            train_y = list(itertools.chain.from_iterable([y[i] for i in train_index_arr]))
+            dev_X = list(itertools.chain.from_iterable([X[i] for i in test_index_arr]))
+            dev_y = list(itertools.chain.from_iterable([y[i] for i in test_index_arr]))
+
+            # train_X, dev_X, train_y, dev_y = train_test_split(X, y, train_size=train_size, random_state=args.random_seed)
             obj_crf.logger.info("{}Train size(fraction): {} :: len(train samples): {} :: len(test samples): {} {}\n"
                                 .format("-"*5, train_size, len(train_y), len(dev_y), "-"*5))
 
@@ -273,31 +324,85 @@ def main(args):
             train_size += args.train_size
 
         # train on entire dataset
-        obj_crf.train(X_train=X, y_train=y)
+        train_X = list(itertools.chain.from_iterable(X))
+        train_y = list(itertools.chain.from_iterable(y))
+        obj_crf.train(X_train=train_X, y_train=train_y)
 
         # evaluate on entire dataset
         obj_crf.logger.info("Evaluate on entire set using the model trained on the same set")
-        obj_crf.evaluate(X_test=X, y_test=y)
+        obj_crf.evaluate(X_test=train_X, y_test=train_y)
 
     if args.flag_evaluate:
         obj_crf.load_model(filename=args.train_model)
         obj_crf.logger.info("Train model: {} loaded".format(args.train_model))
 
         start_time = time.time()
-        obj_crf.evaluate(X_test=X, y_test=y)
-        print('\nEvaluate took {:.3f} seconds\n'.format(time.time() - start_time))
+        if args.train_size is not None and args.train_size < 1:
+            # Evaluate separately on train set on which model was trained on as well as the remaining set
+            train_index_arr, test_index_arr = train_test_split(range(len(clinical_cases)), train_size=args.train_size, random_state=args.random_seed)
+            obj_crf.logger.info("# train indices: {} :: # test indices: {}".format(len(train_index_arr), len(test_index_arr)))
+
+            train_X = list(itertools.chain.from_iterable([X[i] for i in train_index_arr]))
+            train_y = list(itertools.chain.from_iterable([y[i] for i in train_index_arr]))
+            # train_X = [X[i] for i in train_index_arr]
+            # train_y = [y[i] for i in train_index_arr]
+            obj_crf.evaluate(X_test=train_X, y_test=train_y)
+            print('\nEvaluate took {:.3f} seconds on train set(#samples: {})\n'.format(time.time() - start_time, len(train_X)))
+
+            start_time = time.time()
+            test_X = list(itertools.chain.from_iterable([X[i] for i in test_index_arr]))
+            test_y = list(itertools.chain.from_iterable([y[i] for i in test_index_arr]))
+            # test_X = [X[i] for i in test_index_arr]
+            # test_y = [y[i] for i in test_index_arr]
+            obj_crf.evaluate(X_test=test_X, y_test=test_y)
+            print('\nEvaluate took {:.3f} seconds on test set(#samples: {})\n'.format(time.time() - start_time, len(test_X)))
+        else:
+            test_X = list(itertools.chain.from_iterable(X))
+            test_y = list(itertools.chain.from_iterable(y))
+            obj_crf.evaluate(X_test=test_X, y_test=test_y)
+            print('\nEvaluate took {:.3f} seconds\n'.format(time.time() - start_time))
 
     if args.flag_predict:
         obj_crf.load_model(filename=args.train_model)
         obj_crf.logger.info("Train model: {} loaded".format(args.train_model))
 
         start_time = time.time()
-        output_dir = os.path.join(os.path.dirname(__file__), "../output/predict", os.path.basename(Path(args.data_dir)))
-        # Delete output dir (if exists)
-        if os.path.exists(output_dir):
-            shutil.rmtree(output_dir)
-        obj_crf.predict_collection(input_data_dir=args.data_dir, output_data_dir=output_dir, nlp_process=obj_nlp_process)
-        print('\nPredict took {:.3f} seconds\n'.format(time.time() - start_time))
+        if args.train_size is not None and args.train_size < 1:
+            # Predict separately on train set on which model was trained on as well as the remaining set
+            train_index_arr, test_index_arr = train_test_split(range(len(clinical_cases)), train_size=args.train_size,
+                                                               random_state=args.random_seed)
+
+            train_output_dir = os.path.join(os.path.dirname(__file__), "../output/predict", os.path.basename(Path(args.data_dir)), "train")
+            # Delete output dir (if exists)
+            if os.path.exists(train_output_dir):
+                shutil.rmtree(train_output_dir)
+
+            train_clinical_cases = [clinical_cases[i] for i in train_index_arr]
+            obj_crf.predict_collection(clinical_cases=train_clinical_cases, input_data_dir=args.data_dir,
+                                       output_data_dir=train_output_dir, nlp_process=obj_nlp_process)
+            print('\nPredict took {:.3f} seconds on train set\n'.format(time.time() - start_time))
+
+            test_output_dir = os.path.join(os.path.dirname(__file__), "../output/predict", os.path.basename(Path(args.data_dir)), "test")
+            # Delete output dir (if exists)
+            if os.path.exists(test_output_dir):
+                shutil.rmtree(test_output_dir)
+
+            start_time = time.time()
+            test_clinical_cases = [clinical_cases[i] for i in test_index_arr]
+            obj_crf.predict_collection(clinical_cases=test_clinical_cases, input_data_dir=args.data_dir,
+                                       output_data_dir=test_output_dir, nlp_process=obj_nlp_process)
+            print('\nPredict took {:.3f} seconds on test set\n'.format(time.time() - start_time))
+
+        else:
+            output_dir = os.path.join(os.path.dirname(__file__), "../output/predict",
+                                      os.path.basename(Path(args.data_dir)))
+            # Delete output dir (if exists)
+            if os.path.exists(output_dir):
+                shutil.rmtree(output_dir)
+
+            obj_crf.predict_collection(clinical_cases=clinical_cases, input_data_dir=args.data_dir,
+                                       output_data_dir=output_dir, nlp_process=obj_nlp_process)
+            print('\nPredict took {:.3f} seconds\n'.format(time.time() - start_time))
 
 
 if __name__ == "__main__":

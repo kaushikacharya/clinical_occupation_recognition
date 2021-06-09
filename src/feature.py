@@ -12,6 +12,7 @@ import argparse
 import logging
 from src.document import *
 
+
 class Feature:
     """
     Extraction of features of a Document class.
@@ -97,7 +98,8 @@ class Feature:
             # append token features to the list of sentence features
             sent_features.append(token_features)
 
-        return  sent_features
+        return sent_features
+
 
 def main(args):
     import os
@@ -108,13 +110,14 @@ def main(args):
 
     obj_nlp_process = NLPProcess(logging_level=logging_level)
     obj_nlp_process.load_nlp_model()
-    doc_obj = Document(doc_case=args.clinical_case, nlp_process_obj=obj_nlp_process, logging_level=logging_level)
+    doc_obj = Document(doc_case=args.clinical_case, logging_level=logging_level)
     doc_obj.read_document(document_file=os.path.join(args.data_dir, args.clinical_case + ".txt"))
-    doc_obj.parse_document()
+    doc_obj.parse_document(nlp_process=obj_nlp_process)
 
     feature_obj = Feature(doc_obj=doc_obj, logging_level=args.logging_level)
     doc_features = feature_obj.extract_document_features()
     assert len(doc_features) == len(doc_obj.sentences), "Mismatch: count(sentences): {} :: len(doc_features): {]".format(len(doc_obj.sentences), len(doc_features))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

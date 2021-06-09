@@ -1,11 +1,16 @@
 #!/usr/bin/env python
 
+"""
+Script to find out which ground truth entities are present in ProfNER gazetteer.
+"""
+
 import argparse
 import glob
 import io
 import logging
 import os
 
+from src.annotation import *
 from src.document import Document
 from src.knowledge_base import Gazetteer
 from src.nlp_process import NLPProcess
@@ -40,17 +45,18 @@ class GazetteerStatistics:
                 doc_obj = Document(doc_case=clinical_case)
                 doc_obj.read_document(document_file=file_document)
                 doc_obj.parse_document(nlp_process=nlp_process)
-                doc_obj.read_annotation(ann_file=file_ann)
-                doc_obj.parse_annotations()
+                doc_entity_annotations = read_annotation(ann_file=file_ann)
+                parse_annotations(entity_annotations=doc_entity_annotations, doc_obj=doc_obj)
 
-                self.check_entity_in_gazetteer(doc_obj=doc_obj)
+                self.check_entity_in_gazetteer(doc_obj=doc_obj, entity_annotations=doc_entity_annotations)
             except Exception as err:
                 self.logger.error("Failed for clinical case: {}".format(clinical_case), exc_info=True)
 
-    def check_entity_in_gazetteer(self, doc_obj):
-        for ann_i in range(len(doc_obj.entity_annotations)):
-            start_token_index = doc_obj.entity_annotations[ann_i].start_token_index
-            end_token_index = doc_obj.entity_annotations[ann_i].end_token_index
+    def check_entity_in_gazetteer(self, doc_obj, entity_annotations):
+        for ann_i in range(len(entity_annotations)):
+            entity_type = entity_annotations[ann_i].type
+            start_token_index = entity_annotations[ann_i].start_token_index
+            end_token_index = entity_annotations[ann_i].end_token_index
 
             entity_tokens_text = []
             for token_index in range(start_token_index, end_token_index):
@@ -60,12 +66,13 @@ class GazetteerStatistics:
 
             flag_entity_in_gazetteer = self.gazetteer_obj.search(entity_tokens_text)
             if flag_entity_in_gazetteer:
-                self.logger.info("Found :: {}".format(" ".join(entity_tokens_text)))
+                self.logger.info("Entity Type: {} :: Found :: {}".format(entity_type, " ".join(entity_tokens_text)))
             else:
-                sentence_index = doc_obj.entity_annotations[ann_i].sentence_index
+                sentence_index = entity_annotations[ann_i].sentence_index
                 start_char_pos_sent = doc_obj.sentences[sentence_index].start_char_pos
                 end_char_pos_sent = doc_obj.sentences[sentence_index].end_char_pos
-                self.logger.info("Not Found :: {} :: Sentence: {}".format(" ".join(entity_tokens_text), doc_obj.text[start_char_pos_sent: end_char_pos_sent]))
+                self.logger.info("Entity Type: {} :: Not Found :: {} :: Sentence: {}".format(
+                    entity_type, " ".join(entity_tokens_text), doc_obj.text[start_char_pos_sent: end_char_pos_sent]))
 
 
 def main(args):

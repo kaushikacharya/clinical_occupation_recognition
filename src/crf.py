@@ -16,6 +16,7 @@ from sklearn.model_selection import train_test_split
 import time
 import traceback
 
+from src.annotation import *
 from src.document import *
 from src.feature import Feature
 from src.nlp_process import NLPProcess
@@ -32,6 +33,9 @@ class CRF:
 
     def process_collection(self, clinical_cases, data_dir, nlp_process):
         """Process collection to extract features and ground truth NER labels.
+
+            Each element of the list of features/NER labels extracted represents a document.
+            This is unlike rest of the functions, where each element of the input parameter list represents a sentence.
 
             Returns
             -------
@@ -67,9 +71,9 @@ class CRF:
                 doc_obj = Document(doc_case=clinical_case)
                 doc_obj.read_document(document_file=file_doc)
                 doc_obj.parse_document(nlp_process=nlp_process)
-                doc_obj.read_annotation(ann_file=file_ann)
-                doc_obj.parse_annotations()
-                doc_obj.assign_ground_truth_ner_tags()
+                doc_entity_annotations = read_annotation(ann_file=file_ann)
+                parse_annotations(entity_annotations=doc_entity_annotations, doc_obj=doc_obj)
+                doc_obj.assign_ground_truth_ner_tags(entity_annotations=doc_entity_annotations)
 
                 feature_obj = Feature(doc_obj=doc_obj)
                 doc_features = feature_obj.extract_document_features()
@@ -269,20 +273,9 @@ def main(args):
 
             train_X = list(itertools.chain.from_iterable([X[i] for i in train_index_arr]))
             train_y = list(itertools.chain.from_iterable([y[i] for i in train_index_arr]))
-            """
-            for idx in train_index_arr:
-                train_X.extend(X[idx])
-                train_y.extend(y[idx])
-            """
-
-            # train_X = [X[i] for i in train_index_arr]
-            # train_y = [y[i] for i in train_index_arr]
         else:
             train_X = list(itertools.chain.from_iterable(X))
             train_y = list(itertools.chain.from_iterable(y))
-
-            # train_X = X
-            # train_y = y
 
         start_time = time.time()
         obj_crf.train(X_train=train_X, y_train=train_y)
@@ -306,7 +299,6 @@ def main(args):
             dev_X = list(itertools.chain.from_iterable([X[i] for i in test_index_arr]))
             dev_y = list(itertools.chain.from_iterable([y[i] for i in test_index_arr]))
 
-            # train_X, dev_X, train_y, dev_y = train_test_split(X, y, train_size=train_size, random_state=args.random_seed)
             obj_crf.logger.info("{}Train size(fraction): {} :: len(train samples): {} :: len(test samples): {} {}\n"
                                 .format("-"*5, train_size, len(train_y), len(dev_y), "-"*5))
 
@@ -344,16 +336,14 @@ def main(args):
 
             train_X = list(itertools.chain.from_iterable([X[i] for i in train_index_arr]))
             train_y = list(itertools.chain.from_iterable([y[i] for i in train_index_arr]))
-            # train_X = [X[i] for i in train_index_arr]
-            # train_y = [y[i] for i in train_index_arr]
+
             obj_crf.evaluate(X_test=train_X, y_test=train_y)
             print('\nEvaluate took {:.3f} seconds on train set(#samples: {})\n'.format(time.time() - start_time, len(train_X)))
 
             start_time = time.time()
             test_X = list(itertools.chain.from_iterable([X[i] for i in test_index_arr]))
             test_y = list(itertools.chain.from_iterable([y[i] for i in test_index_arr]))
-            # test_X = [X[i] for i in test_index_arr]
-            # test_y = [y[i] for i in test_index_arr]
+
             obj_crf.evaluate(X_test=test_X, y_test=test_y)
             print('\nEvaluate took {:.3f} seconds on test set(#samples: {})\n'.format(time.time() - start_time, len(test_X)))
         else:

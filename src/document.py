@@ -3,7 +3,6 @@
 import argparse
 import io
 import logging
-import re
 
 from src.annotation import EntityAnnotation
 from src.nlp_process import NLPProcess
@@ -56,7 +55,6 @@ class Document:
         self.sentences = []
         # objects of Token class
         self.tokens = []
-        self.entity_annotations = []
         # logging
         logging.basicConfig(level=logging_level)
         self.logger = logging.getLogger(__name__)
@@ -100,110 +98,7 @@ class Document:
         self.logger.info("# sentences: {}".format(len(self.sentences)))
         self.logger.info("# tokens: {}".format(len(self.tokens)))
 
-    def read_annotation(self, ann_file):
-        """
-        Read brat standoff formatted annotation file.
-
-        References
-        ----------
-        https://brat.nlplab.org/standoff.html
-        """
-        with io.open(file=ann_file, mode="r", encoding="utf-8") as fd:
-            for line in fd:
-                line = line.strip()
-
-                if line == "" or line[0] != "T":
-                    continue
-
-                # split the line using tab delimiter
-                tokens = line.split("\t")
-                assert len(tokens) == 3, "Expected format: <Entity ID><TAB><Entity Type><Space><Begin char pos><Space><End char pos><TAB><Text> : {}".format(line)
-
-                entity_id = tokens[0]
-                # extract entity type and char position range
-                char_index = tokens[1].find(" ")
-                assert char_index > 0, "space not found in middle token :: line: {}".format(line)
-                entity_type = tokens[1][:char_index]
-                entity_char_pos_arr = [int(x) for x in re.findall(r'\d+', tokens[1][char_index:])]
-                assert len(entity_char_pos_arr) > 1, "Expected at least two elements for char position range"
-                if len(entity_char_pos_arr) > 2:
-                    print("Discontinuous entity annotation: {}".format(line))
-
-                entity_ann = EntityAnnotation(entity_id=entity_id, start_char_pos=entity_char_pos_arr[0],
-                                              end_char_pos=entity_char_pos_arr[1], entity_type=entity_type)
-                self.entity_annotations.append(entity_ann)
-
-        # Sort wrt start_char_pos
-        self.entity_annotations = sorted(self.entity_annotations, key=lambda x: x.start_char_pos)
-
-        self.logger.info("# entity annotations: {}".format(len(self.entity_annotations)))
-
-    def parse_annotations(self):
-        """Extract and assign token range to the entity annotations."""
-        entity_ann_index = 0
-        sent_i = 0
-
-        while (sent_i < len(self.sentences)) and (entity_ann_index < len(self.entity_annotations)):
-            start_char_pos_sent = self.sentences[sent_i].start_char_pos
-            end_char_pos_sent = self.sentences[sent_i].end_char_pos
-            start_char_pos_ann = self.entity_annotations[entity_ann_index].start_char_pos
-            end_char_pos_ann = self.entity_annotations[entity_ann_index].end_char_pos
-
-            if end_char_pos_sent <= start_char_pos_ann:
-                # move to the next sentence
-                sent_i += 1
-                continue
-            elif start_char_pos_sent <= start_char_pos_ann < end_char_pos_sent:
-                # Current entity belongs to the current sentence
-                # Identify token range for the current entity
-                start_token_index_ann = None
-                end_token_index_ann = None
-
-                token_index = self.sentences[sent_i].start_token_index
-                while token_index < self.sentences[sent_i].end_token_index:
-                    start_char_pos_token = self.tokens[token_index].start_char_pos
-                    end_char_pos_token = self.tokens[token_index].end_char_pos
-
-                    if start_char_pos_token <= start_char_pos_ann < end_char_pos_token:
-                        start_token_index_ann = token_index
-                        break
-
-                    # increment token index
-                    token_index += 1
-
-                assert start_token_index_ann is not None, "start_token_index_ann not assigned. Sentence #{}".format(sent_i)
-                while token_index < self.sentences[sent_i].end_token_index:
-                    start_char_pos_token = self.tokens[token_index].start_char_pos
-                    end_char_pos_token = self.tokens[token_index].end_char_pos
-
-                    if end_char_pos_ann > end_char_pos_token:
-                        # move to the next token
-                        token_index += 1
-                    else:
-                        end_token_index_ann = token_index + 1
-                        break
-
-                if end_token_index_ann is None:
-                    end_token_index_ann = self.sentences[sent_i].end_token_index
-
-                assert self.entity_annotations[entity_ann_index].start_token_index is None,\
-                    "start_token_index already assigned for entity #{}".format(entity_ann_index)
-                assert self.entity_annotations[entity_ann_index].end_token_index is None,\
-                    "end_token_index already assigned for entity #{}".format(entity_ann_index)
-
-                # Assign the token index range to the entity annotation
-                self.entity_annotations[entity_ann_index].start_token_index = start_token_index_ann
-                self.entity_annotations[entity_ann_index].end_token_index = end_token_index_ann
-
-                # Assign sentence index
-                self.entity_annotations[entity_ann_index].sentence_index = sent_i
-
-                # move to the next entity
-                entity_ann_index += 1
-            else:
-                assert False, "entity_ann_index: {} missed assignment of token range".format(entity_ann_index)
-
-    def assign_ground_truth_ner_tags(self):
+    def assign_ground_truth_ner_tags(self, entity_annotations):
         """Assign NER ground truth tag to the tokens"""
 
         # First assign tag "O" to all the tokens
@@ -212,16 +107,17 @@ class Document:
             self.tokens[token_i].ner_tag = ner_tag
 
         # Now update tag for the tokens which are part of entity annotations
-        for ann_i in range(len(self.entity_annotations)):
-            start_token_index = self.entity_annotations[ann_i].start_token_index
-            end_token_index = self.entity_annotations[ann_i].end_token_index
-            self.tokens[start_token_index].ner_tag = "B-" + self.entity_annotations[ann_i].type
+        for ann_i in range(len(entity_annotations)):
+            start_token_index = entity_annotations[ann_i].start_token_index
+            end_token_index = entity_annotations[ann_i].end_token_index
+            self.tokens[start_token_index].ner_tag = "B-" + entity_annotations[ann_i].type
             for token_index in range(start_token_index+1, end_token_index):
-                self.tokens[token_index].ner_tag = "I-" + self.entity_annotations[ann_i].type
+                self.tokens[token_index].ner_tag = "I-" + entity_annotations[ann_i].type
 
 
 def main(args):
     import os
+    from src.annotation import read_annotation, parse_annotations
 
     assert args.logging_level in ["DEBUG", "INFO", "WARN", "WARNING", "ERROR", "CRITICAL"],\
         "unexpected logging_level: {}".format(args.logging_level)
@@ -232,9 +128,10 @@ def main(args):
     doc_obj = Document(doc_case=args.clinical_case, logging_level=logging_level)
     doc_obj.read_document(document_file=os.path.join(args.data_dir, args.clinical_case+".txt"))
     doc_obj.parse_document(nlp_process=obj_nlp_process)
-    doc_obj.read_annotation(ann_file=os.path.join(args.data_dir, args.clinical_case+".ann"))
-    doc_obj.parse_annotations()
-    doc_obj.assign_ground_truth_ner_tags()
+    entity_annotations = read_annotation(ann_file=os.path.join(args.data_dir, args.clinical_case+".ann"))
+    doc_obj.logger.info("# entity annotations: {}".format(len(entity_annotations)))
+    parse_annotations(entity_annotations=entity_annotations, doc_obj=doc_obj)
+    doc_obj.assign_ground_truth_ner_tags(entity_annotations=entity_annotations)
 
 
 if __name__ == "__main__":

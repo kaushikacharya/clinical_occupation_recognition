@@ -4,12 +4,13 @@ import glob
 import os
 
 
-def collect_clinical_cases(data_dir):
+def collect_clinical_cases(data_dir, file_extension="txt"):
     """Collect clinical cases and sort to ensure consistent order.
 
         Parameters
         ----------
         data_dir : Path
+        file_extension : str
 
         References
         ----------
@@ -20,7 +21,7 @@ def collect_clinical_cases(data_dir):
             - "The entries are yielded in arbitrary order"
     """
     clinical_cases = []
-    for f in glob.iglob(pathname=os.path.join(data_dir, "*.txt")):
+    for f in glob.iglob(pathname=os.path.join(data_dir, "*.{}".format(file_extension))):
         # extract clinical case
         file_basename, _ = os.path.splitext(os.path.basename(f))
         clinical_cases.append(file_basename)

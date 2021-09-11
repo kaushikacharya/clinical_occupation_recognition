@@ -55,3 +55,12 @@ Below are the example commands.
 |   Recall       |   0.840 |  0.467  |
 |   F-score      |   0.894 |  0.566  |
 
+
+### Leaderboard
+![Leaderboard](./images/leaderboard.png "Leaderboard")
+
+### Task Description Paper
+[NLP applied to occupational health: MEDDOPROF
+shared task at IberLEF 2021 on automatic
+recognition, classification and normalization of
+professions and occupations from medical texts by Salvador Lima Lopez et al.](https://rua.ua.es/dspace/bitstream/10045/117495/1/PLN_67_21.pdf)

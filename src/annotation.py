@@ -180,9 +180,9 @@ def compare_annotations(entity_annotations_truth, entity_annotations_predicted, 
             if flag_false_positive:
                 while doc_obj.sentences[sent_i].end_char_pos <= entity_ann_pred.start_char_pos:
                     sent_i += 1
-                logger.info("False Positive: Predicted entity #{} :: char pos range: ({},{}) :: entity text: {} :: "
+                logger.info("False Positive: Type: {} :: Predicted entity #{} :: char pos range: ({},{}) :: entity text: {} :: "
                             "sentence: {}"
-                            .format(ann_pred_i, entity_ann_pred.start_char_pos, entity_ann_pred.end_char_pos,
+                            .format(entity_ann_pred.type, ann_pred_i, entity_ann_pred.start_char_pos, entity_ann_pred.end_char_pos,
                                     doc_obj.text[entity_ann_pred.start_char_pos: entity_ann_pred.end_char_pos],
                                     doc_obj.text[doc_obj.sentences[sent_i].start_char_pos: doc_obj.sentences[sent_i].end_char_pos]))
         elif entity_ann_truth.end_char_pos <= entity_ann_pred.start_char_pos:
@@ -204,9 +204,9 @@ def compare_annotations(entity_annotations_truth, entity_annotations_predicted, 
             if flag_false_negative:
                 while doc_obj.sentences[sent_i].end_char_pos <= entity_ann_truth.start_char_pos:
                     sent_i += 1
-                logger.info("False Negative: Truth entity #{} :: char pos range: ({},{}) :: entity text: {} :: "
+                logger.info("False Negative: Type: {} :: Truth entity #{} :: char pos range: ({},{}) :: entity text: {} :: "
                             "sentence: {}"
-                            .format(ann_truth_i, entity_ann_truth.start_char_pos, entity_ann_truth.end_char_pos,
+                            .format(entity_ann_truth.type, ann_truth_i, entity_ann_truth.start_char_pos, entity_ann_truth.end_char_pos,
                                     doc_obj.text[entity_ann_truth.start_char_pos: entity_ann_truth.end_char_pos],
                                     doc_obj.text[doc_obj.sentences[sent_i].start_char_pos: doc_obj.sentences[sent_i].end_char_pos]))
 
@@ -256,9 +256,9 @@ def compare_annotations(entity_annotations_truth, entity_annotations_predicted, 
                 # case: False negative
                 while doc_obj.sentences[sent_i].end_char_pos <= entity_ann_truth.start_char_pos:
                     sent_i += 1
-                logger.info("False Negative: Truth entity #{} :: char pos range: ({},{}) :: entity text: {} :: "
+                logger.info("False Negative: Type: {} :: Truth entity #{} :: char pos range: ({},{}) :: entity text: {} :: "
                             "sentence: {}"
-                            .format(ann_truth_i, entity_ann_truth.start_char_pos, entity_ann_truth.end_char_pos,
+                            .format(entity_ann_truth.type, ann_truth_i, entity_ann_truth.start_char_pos, entity_ann_truth.end_char_pos,
                                     doc_obj.text[entity_ann_truth.start_char_pos: entity_ann_truth.end_char_pos],
                                     doc_obj.text[doc_obj.sentences[sent_i].start_char_pos: doc_obj.sentences[sent_i].end_char_pos]))
 
@@ -270,8 +270,8 @@ def compare_annotations(entity_annotations_truth, entity_annotations_predicted, 
             entity_ann_truth = entity_annotations_truth[ann_truth_i]
             while doc_obj.sentences[sent_i].end_char_pos <= entity_ann_truth.start_char_pos:
                 sent_i += 1
-            logger.info("False Negative: Truth entity #{} :: char pos range: ({},{}) :: entity text: {} :: sentence: {}"
-                        .format(ann_truth_i, entity_ann_truth.start_char_pos, entity_ann_truth.end_char_pos,
+            logger.info("False Negative: Type: {} :: Truth entity #{} :: char pos range: ({},{}) :: entity text: {} :: sentence: {}"
+                        .format(entity_ann_truth.type, ann_truth_i, entity_ann_truth.start_char_pos, entity_ann_truth.end_char_pos,
                                 doc_obj.text[entity_ann_truth.start_char_pos: entity_ann_truth.end_char_pos],
                                 doc_obj.text[doc_obj.sentences[sent_i].start_char_pos: doc_obj.sentences[sent_i].end_char_pos]))
             ann_truth_i += 1
@@ -286,9 +286,9 @@ def compare_annotations(entity_annotations_truth, entity_annotations_predicted, 
                 # case: False positive
                 while doc_obj.sentences[sent_i].end_char_pos <= entity_ann_pred.start_char_pos:
                     sent_i += 1
-                logger.info("False Positive: Predicted entity #{} :: char pos range: ({},{}) :: entity text: {} ::"
-                            " sentence: {}"
-                            .format(ann_pred_i, entity_ann_pred.start_char_pos, entity_ann_pred.end_char_pos,
+                logger.info("False Positive: Type: {} :: Predicted entity #{} :: char pos range: ({},{}) :: "
+                            "entity text: {} :: sentence: {}"
+                            .format(entity_ann_pred.type, ann_pred_i, entity_ann_pred.start_char_pos, entity_ann_pred.end_char_pos,
                                     doc_obj.text[entity_ann_pred.start_char_pos: entity_ann_pred.end_char_pos],
                                     doc_obj.text[doc_obj.sentences[sent_i].start_char_pos: doc_obj.sentences[sent_i].end_char_pos]))
 
@@ -301,9 +301,9 @@ def compare_annotations(entity_annotations_truth, entity_annotations_predicted, 
             entity_ann_pred = entity_annotations_predicted[ann_pred_i]
             while doc_obj.sentences[sent_i].end_char_pos <= entity_ann_pred.start_char_pos:
                 sent_i += 1
-            logger.info("False Positive: Predicted entity #{} :: char pos range: ({},{}) :: entity text: {} ::"
-                        " sentence: {}"
-                        .format(ann_pred_i, entity_ann_pred.start_char_pos, entity_ann_pred.end_char_pos,
+            logger.info("False Positive: Type: {} :: Predicted entity #{} :: char pos range: ({},{}) :: "
+                        "entity text: {} :: sentence: {}"
+                        .format(entity_ann_pred.type, ann_pred_i, entity_ann_pred.start_char_pos, entity_ann_pred.end_char_pos,
                                 doc_obj.text[entity_ann_pred.start_char_pos: entity_ann_pred.end_char_pos],
                                 doc_obj.text[doc_obj.sentences[sent_i].start_char_pos: doc_obj.sentences[sent_i].end_char_pos]))
             # Move to the next predicted entity

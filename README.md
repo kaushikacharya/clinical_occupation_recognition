@@ -13,7 +13,12 @@ https://temu.bsc.es/meddoprof/
 
 ### Data
 - *Genre*: Medical documents 
-- *Language*: Spanish 
+- *Language*: Spanish
+
+### Dependencies
+  ```
+    $ pip install -r requirements.txt
+  ```
 
 #### How to run?
 Below are the example commands.
@@ -27,8 +32,7 @@ Below are the example commands.
         python -u -m src.crf --train_model <path_trained_model> --flag_predict
     ```
 - Evaluate
-  - Using task organizer's evaluation script:
-    
+  - Using task organizer's evaluation script:  
     https://github.com/TeMU-BSC/meddoprof-evaluation-library
 
   - Token level evaluation using seqeval:

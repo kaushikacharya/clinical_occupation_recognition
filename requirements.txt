@@ -1,0 +1,8 @@
+joblib
+fasttext
+numpy
+pandas
+scikit-learn
+seqeval
+sklearn-crfsuite
+spacy

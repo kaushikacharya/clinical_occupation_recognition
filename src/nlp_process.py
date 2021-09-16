@@ -13,6 +13,7 @@ References
     - Renders dependency parse tree sentence by sentence.
 """
 
+
 class NLPProcess:
     """NLP processing of text
     """
@@ -37,6 +38,7 @@ class NLPProcess:
         assert self.nlp is not None, "pre-requisite: Execute load_nlp_model()"
         doc = self.nlp(text)
         return doc
+
 
 def main(args, verbose=True):
     import os
@@ -64,6 +66,7 @@ def main(args, verbose=True):
                 svg_sentence_file = os.path.join(output_dir, str(sent_i)+".svg")
                 with io.open(file=svg_sentence_file, mode="w", encoding="utf-8") as fd_svg:
                     fd_svg.write(svg)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -68,3 +68,7 @@ Below are the example commands.
 shared task at IberLEF 2021 on automatic
 recognition, classification and normalization of
 professions and occupations from medical texts by Salvador Lima Lopez et al.](https://rua.ua.es/dspace/bitstream/10045/117495/1/PLN_67_21.pdf)
+
+### Publication
+[Occupation Recognition and Normalization in Clinical Notes by Kaushik Acharya](http://ceur-ws.org/Vol-2943/meddoprof_paper6.pdf)
+

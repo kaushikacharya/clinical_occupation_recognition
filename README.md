@@ -15,6 +15,9 @@ https://temu.bsc.es/meddoprof/
 - *Genre*: Medical documents 
 - *Language*: Spanish
 
+#### Sample
+![Sample](./images/brat_annotation.png "Sample")
+
 ### Dependencies
   ```
     $ pip install -r requirements.txt
@@ -72,3 +75,5 @@ professions and occupations from medical texts by Salvador Lima Lopez et al.](ht
 ### Publication
 [Occupation Recognition and Normalization in Clinical Notes by Kaushik Acharya](http://ceur-ws.org/Vol-2943/meddoprof_paper6.pdf)
 
+### Related Work
+[Spanish to English translation using Neural Machine Translation](https://github.com/kaushikacharya/Natural_Language_Processing_with_Deep_Learning_CS224n/a4)
